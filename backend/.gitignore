@@ -1,0 +1,17 @@
+__pycache__/
+.venv/
+venv/
+runtime/
+results/
+uploads/
+config.py
+requirments.txt
+requirements.txt
+data/*.pdf
+data/*.doc
+data/*.docx
+*.log
+*.aux
+*.out
+.env
+!.env.example

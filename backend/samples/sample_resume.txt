@@ -1,0 +1,22 @@
+Alex Morgan
+alex.morgan@example.com | +1 555 010 2040
+https://www.linkedin.com/in/alex-morgan-example | https://github.com/alex-morgan-example
+
+SUMMARY
+Software engineer with four years of experience building reliable web applications and data services.
+
+EXPERIENCE
+Software Engineer, Northstar Labs — January 2023 to Present
+- Built Python APIs that process approximately 500,000 records per day.
+- Added automated tests and monitoring, reducing production incidents by 30 percent.
+- Collaborated with product and design teams to ship accessible customer workflows.
+
+Junior Software Engineer, Cedar Analytics — June 2021 to December 2022
+- Developed React dashboards for operational reporting.
+- Improved API response times by optimizing database queries and caching repeated requests.
+
+EDUCATION
+BSc in Computer Science, Example State University — 2021
+
+SKILLS
+Python, FastAPI, TypeScript, React, SQL, Docker, GitHub Actions, automated testing

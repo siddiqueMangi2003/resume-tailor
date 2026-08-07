@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: resume-tailor-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeployTrigger: commit
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GROQ_MODEL
+        value: openai/gpt-oss-120b
+      - key: ASPOSE_CLIENT_ID
+        sync: false
+      - key: ASPOSE_CLIENT_SECRET
+        sync: false
+      - key: FRONTEND_ORIGINS
+        value: https://siddiquemangi2003.github.io
+      - key: MAX_UPLOAD_MB
+        value: "5"
+      - key: MAX_JOB_DESCRIPTION_CHARS
+        value: "15000"
+      - key: RESULT_TTL_SECONDS
+        value: "600"
+      - key: RATE_LIMIT_REQUESTS
+        value: "5"
+      - key: RATE_LIMIT_WINDOW_SECONDS
+        value: "900"

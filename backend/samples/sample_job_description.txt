@@ -1,0 +1,5 @@
+Example Company is seeking a software engineer to build secure APIs and responsive web applications.
+
+The successful candidate will work with Python, FastAPI, TypeScript, React, SQL, Docker, and automated testing. Responsibilities include designing maintainable services, improving performance, monitoring production systems, reviewing code, and collaborating with product and design partners.
+
+Candidates should communicate clearly and describe measurable outcomes without inventing experience or qualifications.
