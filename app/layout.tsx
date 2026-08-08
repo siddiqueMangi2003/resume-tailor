@@ -1,11 +1,13 @@
 import type React from "react"
 import type { Metadata } from "next"
 import { ThemeProvider } from "@/components/theme-provider"
+import { AuthProvider } from "@/components/auth-provider"
 import "./globals.css"
 
 export const metadata: Metadata = {
-  title: "Resume Tailor - AI-Powered Resume Customization",
-  description: "Tailor your resume to any job description with AI-powered LaTeX formatting",
+  title: "Resume Tailor — Tailor resumes and track every application",
+  description:
+    "Create truthful, ATS-friendly resumes and manage your complete job-search pipeline in one private workspace.",
 }
 
 export default function RootLayout({
@@ -17,7 +19,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-          {children}
+          <AuthProvider>{children}</AuthProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -1,6 +1,7 @@
 "use client"
 
-import { useState } from "react"
+import Link from "next/link"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { FileUpload } from "@/components/file-upload"
@@ -8,9 +9,12 @@ import { JobDescriptionInput } from "@/components/job-description-input"
 import { TemplateSelector } from "@/components/template-selector"
 import { ProgressTracker, type ProcessStep } from "@/components/progress-tracker"
 import { ResumePreview } from "@/components/resume-preview"
-import { ModeToggle } from "@/components/mode-toggle"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Sparkles, FileText, Target, Zap, ShieldCheck, TriangleAlert } from "lucide-react"
+import { ArrowRight, BriefcaseBusiness, FileText, Sparkles, Target, Zap, ShieldCheck, TriangleAlert } from "lucide-react"
+import { SiteHeader } from "@/components/site-header"
+import { PipelineOrbit } from "@/components/pipeline-orbit"
+import { useAuth } from "@/components/auth-provider"
+import { getSupabaseBrowserClient } from "@/lib/supabase"
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL?.replace(/\/$/, "")
 
@@ -25,6 +29,7 @@ interface TailorApiResponse {
 }
 
 export default function HomePage() {
+  const { user } = useAuth()
   const [resumeFile, setResumeFile] = useState<File | null>(null)
   const [jobDescription, setJobDescription] = useState("")
   const [selectedTemplate, setSelectedTemplate] = useState("template1")
@@ -36,6 +41,32 @@ export default function HomePage() {
   const [errorMessage, setErrorMessage] = useState("")
   const [warnings, setWarnings] = useState<string[]>([])
   const [expiresInSeconds, setExpiresInSeconds] = useState(0)
+  const [linkedApplication, setLinkedApplication] = useState<{
+    id: string
+    company: string
+    role: string
+  } | null>(null)
+
+  useEffect(() => {
+    const saved = sessionStorage.getItem("resume-tailor-application")
+    if (!saved) return
+    try {
+      const application = JSON.parse(saved) as {
+        id: string
+        company: string
+        role: string
+        jobDescription: string
+      }
+      if (application.jobDescription) {
+        queueMicrotask(() => {
+          setJobDescription(application.jobDescription)
+          setLinkedApplication({ id: application.id, company: application.company, role: application.role })
+        })
+      }
+    } catch {
+      sessionStorage.removeItem("resume-tailor-application")
+    }
+  }, [])
 
   const resetResults = () => {
     setCurrentStep("idle")
@@ -105,6 +136,18 @@ export default function HomePage() {
       setExpiresInSeconds(payload.expires_in_seconds)
       setLatexContent("Your tailored resume is ready.")
       setCurrentStep("complete")
+
+      if (linkedApplication && user) {
+        const supabase = getSupabaseBrowserClient()
+        await supabase
+          ?.from("job_applications")
+          .update({
+            resume_template_id: selectedTemplate,
+            resume_file_name: resumeFile.name,
+          })
+          .eq("id", linkedApplication.id)
+        sessionStorage.removeItem("resume-tailor-application")
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Resume generation failed."
       setErrorMessage(message)
@@ -125,32 +168,25 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-      <header className="border-b bg-card/80 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-                <Sparkles className="h-5 w-5 text-primary-foreground" />
-              </div>
-              <h1 className="font-heading font-bold text-xl">Resume Tailor</h1>
-            </div>
-            <ModeToggle />
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen overflow-x-hidden bg-background">
+      <div className="ambient-grid" aria-hidden="true" />
+      <SiteHeader />
 
-      <section className="py-12 bg-gradient-to-b from-background to-muted/20">
-        <div className="container mx-auto px-4 text-center">
-          <h2 className="font-heading font-bold text-4xl md:text-5xl mb-4 text-balance">
-            Tailor Your Resume with <span className="text-primary">AI Precision</span>
+      <section className="tailor-hero container mx-auto px-4">
+        <div className="tailor-hero-copy">
+          <span className="eyebrow"><Sparkles className="h-4 w-4" /> Truthful AI tailoring</span>
+          <h2 className="font-heading font-bold text-5xl md:text-6xl text-balance">
+            One resume.<br /><span>Every right opportunity.</span>
           </h2>
-          <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto text-pretty">
-            Adapt your existing experience to a job description without inventing qualifications,
-            then download ATS-friendly TEX, PDF, and DOCX results.
+          <p className="text-lg text-muted-foreground max-w-2xl text-pretty">
+            Adapt your real experience to a role without inventing qualifications, then carry that momentum into a focused application pipeline.
           </p>
+          <div className="hero-actions">
+            <a href="#tailor-workspace" className="primary-cta"><Sparkles className="h-4 w-4" /> Tailor a resume</a>
+            <Link href="/tracker" className="secondary-cta"><BriefcaseBusiness className="h-4 w-4" /> Open job tracker <ArrowRight className="h-4 w-4" /></Link>
+          </div>
 
-          <div className="flex flex-wrap justify-center gap-6 mb-8">
+          <div className="feature-row">
             <div className="flex items-center gap-2 text-sm">
               <FileText className="h-4 w-4 text-primary" />
               <span>Six Reviewable Templates</span>
@@ -169,9 +205,15 @@ export default function HomePage() {
             </div>
           </div>
         </div>
+        <PipelineOrbit />
       </section>
 
-      <main className="container mx-auto px-4 py-8">
+      <main id="tailor-workspace" className="container mx-auto px-4 py-10 scroll-mt-20">
+        <div className="workspace-heading">
+          <span className="eyebrow">Resume studio</span>
+          <h2>Build the version that belongs in this conversation.</h2>
+          <p>Your source resume stays factual. The language and structure become relevant.</p>
+        </div>
         <div className="grid lg:grid-cols-2 gap-8">
           <div className="space-y-6">
             <FileUpload
@@ -192,6 +234,17 @@ export default function HomePage() {
               onJobDescriptionSubmit={handleJobDescriptionChange}
               jobDescription={jobDescription}
             />
+
+            {linkedApplication && (
+              <Alert className="linked-application-alert">
+                <BriefcaseBusiness className="h-4 w-4" />
+                <AlertTitle>Tailoring for {linkedApplication.company}</AlertTitle>
+                <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+                  <span>{linkedApplication.role} · the template choice will be saved to your tracker.</span>
+                  <Link href="/tracker" className="font-semibold text-primary hover:underline">Back to tracker</Link>
+                </AlertDescription>
+              </Alert>
+            )}
 
             <TemplateSelector
               selectedTemplate={selectedTemplate}
