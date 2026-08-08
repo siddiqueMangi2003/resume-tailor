@@ -17,7 +17,7 @@ services:
       - key: ASPOSE_CLIENT_SECRET
         sync: false
       - key: FRONTEND_ORIGINS
-        value: https://siddiquemangi2003.github.io
+        value: https://siddiquemangi2003.github.io,http://localhost:4173,http://127.0.0.1:4173
       - key: MAX_UPLOAD_MB
         value: "5"
       - key: MAX_JOB_DESCRIPTION_CHARS
