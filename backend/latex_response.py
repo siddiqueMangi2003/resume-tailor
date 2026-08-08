@@ -47,8 +47,8 @@ TEMPLATE_STYLES = {
         "section_style": r"\large\bfseries\sffamily\color{Accent}",
         "section_suffix": "",
         "header": (
-            r"\newcommand{\ResumeHeader}[2]{{\raggedright"
-            r"{\Huge\bfseries\sffamily\color{Accent} #1}\\[3pt]{\small #2}\par\vspace{6pt}}}"
+            r"\newcommand{\ResumeHeader}[2]{\begin{flushleft}"
+            r"{\Huge\bfseries\sffamily\color{Accent} #1}\\[3pt]{\small #2}\end{flushleft}}"
         ),
         "item_label": r"\textcolor{Accent}{\raisebox{1pt}{\rule{3pt}{3pt}}}",
         "margin": "0.7in",
@@ -73,9 +73,9 @@ TEMPLATE_STYLES = {
         "section_style": r"\Large\bfseries\sffamily\color{Accent}",
         "section_suffix": r"[\color{Accent}\titlerule[1.4pt]]",
         "header": (
-            r"\newcommand{\ResumeHeader}[2]{{\raggedright"
+            r"\newcommand{\ResumeHeader}[2]{\begin{flushleft}"
             r"{\Huge\bfseries\sffamily\color{Accent} #1}\\[4pt]"
-            r"{\small\color{black} #2}\par\vspace{7pt}}}"
+            r"{\small\color{black} #2}\end{flushleft}}"
         ),
         "item_label": r"\textcolor{Accent}{\textbullet}",
         "margin": "0.62in",
@@ -95,7 +95,7 @@ TEMPLATE_STYLES = {
     },
     "template6": {
         "accent": "713F12",
-        "font": r"\usepackage{tgpagella}",
+        "font": r"\renewcommand{\rmdefault}{ppl}\renewcommand{\familydefault}{\rmdefault}",
         "section_style": r"\large\bfseries\sffamily\color{Accent}",
         "section_suffix": r"[\color{Accent}\titlerule]",
         "header": (

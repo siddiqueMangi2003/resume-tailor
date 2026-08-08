@@ -21,6 +21,7 @@ RUN pip install --upgrade pip \
     && pip install -r requirements.prod.txt
 
 COPY backend/ ./
+RUN python template_smoke.py
 RUN useradd --create-home --shell /usr/sbin/nologin appuser \
     && mkdir -p "${RUNTIME_DIR}" \
     && chown -R appuser:appuser /app "${RUNTIME_DIR}"
