@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
+import unicodedata
 from pathlib import Path
+from typing import Any
 
 from asposewordscloud.apis.words_api import WordsApi
 from asposewordscloud.models.requests import ConvertDocumentRequest
@@ -70,8 +73,142 @@ def validate_generated_latex(content: str) -> str:
     return content
 
 
+def _escape_latex(value: Any, max_chars: int = 2_000) -> str:
+    """Convert untrusted model text into compact, ASCII-safe LaTeX text."""
+    if not isinstance(value, str):
+        return ""
+    value = (
+        value.replace("\u2013", "-")
+        .replace("\u2014", "-")
+        .replace("\u2018", "'")
+        .replace("\u2019", "'")
+        .replace("\u201c", '"')
+        .replace("\u201d", '"')
+        .replace("\u2022", "-")
+    )
+    value = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode()
+    value = re.sub(r"\s+", " ", value).strip()[:max_chars]
+    replacements = {
+        "\\": r"\textbackslash{}",
+        "{": r"\{",
+        "}": r"\}",
+        "$": r"\$",
+        "&": r"\&",
+        "#": r"\#",
+        "%": r"\%",
+        "_": r"\_",
+        "~": r"\textasciitilde{}",
+        "^": r"\textasciicircum{}",
+    }
+    return "".join(replacements.get(character, character) for character in value)
+
+
+def _text_list(value: Any, *, max_items: int = 20, max_chars: int = 500) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [
+        escaped
+        for item in value[:max_items]
+        if (escaped := _escape_latex(item, max_chars))
+    ]
+
+
+def _render_items(items: list[str]) -> list[str]:
+    if not items:
+        return []
+    return [r"\begin{itemize}", *(rf"\item {item}" for item in items), r"\end{itemize}"]
+
+
+def _render_entry(entry: Any, *, primary_key: str, secondary_key: str) -> list[str]:
+    if not isinstance(entry, dict):
+        return []
+    primary = _escape_latex(entry.get(primary_key), 500)
+    secondary = _escape_latex(entry.get(secondary_key), 500)
+    dates = _escape_latex(entry.get("dates"), 200)
+    location = _escape_latex(entry.get("location"), 300)
+    bullets = _text_list(entry.get("bullets"), max_items=12, max_chars=1_000)
+    if not any((primary, secondary, dates, location, bullets)):
+        return []
+
+    lines: list[str] = []
+    heading = primary or secondary
+    if heading:
+        line = rf"\textbf{{{heading}}}"
+        if dates:
+            line += rf"\hfill {dates}"
+        lines.append(line + r"\\")
+    elif dates:
+        lines.append(dates + r"\\")
+
+    detail_parts = [part for part in (secondary if secondary != heading else "", location) if part]
+    if detail_parts:
+        lines.append(rf"\textit{{{' | '.join(detail_parts)}}}")
+    lines.extend(_render_items(bullets))
+    return lines
+
+
+def render_structured_resume(payload: Any) -> str:
+    """Render model JSON through a fixed LaTeX template with escaped text fields."""
+    if not isinstance(payload, dict):
+        raise ValueError("The AI response was not a JSON object.")
+
+    name = _escape_latex(payload.get("name"), 300) or "Candidate"
+    contact = _text_list(payload.get("contact"), max_items=10, max_chars=300)
+    lines = [r"\begin{center}", rf"{{\LARGE\textbf{{{name}}}}}\\"]
+    if contact:
+        lines.append(r"\enspace|\enspace ".join(contact))
+    lines.append(r"\end{center}")
+
+    summary = _escape_latex(payload.get("summary"), 2_500)
+    if summary:
+        lines.extend([r"\section*{Professional Summary}", summary])
+
+    skills = _text_list(payload.get("skills"), max_items=40, max_chars=200)
+    if skills:
+        lines.extend([r"\section*{Skills}", ", ".join(skills)])
+
+    section_specs = (
+        ("Experience", "experience", "company", "role"),
+        ("Education", "education", "institution", "degree"),
+        ("Projects", "projects", "name", "context"),
+    )
+    for title, key, primary_key, secondary_key in section_specs:
+        entries = payload.get(key)
+        if not isinstance(entries, list):
+            continue
+        rendered_entries = [
+            rendered
+            for entry in entries[:20]
+            if (
+                rendered := _render_entry(
+                    entry,
+                    primary_key=primary_key,
+                    secondary_key=secondary_key,
+                )
+            )
+        ]
+        if rendered_entries:
+            lines.append(rf"\section*{{{title}}}")
+            for rendered in rendered_entries:
+                lines.extend(rendered)
+
+    additional_sections = payload.get("additional_sections")
+    if isinstance(additional_sections, list):
+        for section in additional_sections[:10]:
+            if not isinstance(section, dict):
+                continue
+            title = _escape_latex(section.get("title"), 200)
+            items = _text_list(section.get("items"), max_items=20, max_chars=800)
+            if title and items:
+                lines.append(rf"\section*{{{title}}}")
+                lines.extend(_render_items(items))
+
+    body = "\n".join(lines)
+    return validate_generated_latex(body)
+
+
 def tailor_resume_content(resume_text: str, job_description: str) -> str:
-    """Tailor a resume without inventing facts and return a LaTeX body fragment."""
+    """Tailor a resume into structured data and deterministically render LaTeX."""
     api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         raise RuntimeError("GROQ_API_KEY is not configured.")
@@ -80,7 +217,7 @@ def tailor_resume_content(resume_text: str, job_description: str) -> str:
     timeout_seconds = float(os.getenv("GROQ_TIMEOUT_SECONDS", "90"))
     client = Groq(api_key=api_key, timeout=timeout_seconds)
 
-    system_prompt = r"""
+    system_prompt = """
 You are an expert resume editor. Tailor the supplied resume to the job description.
 
 Truthfulness is mandatory:
@@ -90,25 +227,19 @@ Truthfulness is mandatory:
 - You may rephrase, prioritize, and shorten existing facts.
 - If the job requests a skill not supported by the source resume, do not add it.
 
-Return only a LaTeX body fragment, never a complete document and never Markdown.
-Use this structure where data exists:
-\begin{center}
-{\LARGE\textbf{Candidate Name}}\\
-contact details separated by \enspace|\enspace
-\end{center}
-\section*{Professional Summary}
-...
-\section*{Experience}
-\textbf{Employer}\hfill Dates\\
-\textit{Role}\hfill Location
-\begin{itemize}
-\item ...
-\end{itemize}
+Return one JSON object and no Markdown. Use exactly these top-level keys:
+- name: string
+- contact: array of strings
+- summary: string
+- skills: array of strings
+- experience: array of objects with company, role, dates, location, bullets
+- education: array of objects with institution, degree, dates, location, bullets
+- projects: array of objects with name, context, dates, location, bullets
+- additional_sections: array of objects with title and items
 
-Allowed formatting includes center, section*, itemize, item, textbf, textit, emph, hfill,
-line breaks, and escaped LaTeX special characters. Do not use file access, package loading,
-custom command definitions, document declarations, scripts, external images, or embedded files.
-Keep the output concise, ATS-readable, and normally within two pages.
+Every named key must be present. Use empty strings or arrays when the source resume has no
+corresponding data. Values must be plain text without Markdown, HTML, or LaTeX. Keep the
+result concise, ATS-readable, and normally within two pages.
 """.strip()
 
     user_prompt = (
@@ -118,7 +249,7 @@ Keep the output concise, ATS-readable, and normally within two pages.
         "TARGET JOB DESCRIPTION\n"
         "----------------------\n"
         f"{job_description}\n\n"
-        "Return only the truthful tailored LaTeX body fragment."
+        "Return only the truthful structured JSON resume."
     )
 
     completion = client.chat.completions.create(
@@ -129,9 +260,14 @@ Keep the output concise, ATS-readable, and normally within two pages.
         ],
         temperature=0.2,
         max_tokens=5_000,
+        response_format={"type": "json_object"},
     )
     content = completion.choices[0].message.content or ""
-    return validate_generated_latex(content)
+    try:
+        payload = json.loads(content)
+    except json.JSONDecodeError as exc:
+        raise ValueError("The AI returned invalid JSON.") from exc
+    return render_structured_resume(payload)
 
 
 def build_latex_document(body: str, template_id: str) -> str:
