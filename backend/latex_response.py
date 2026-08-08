@@ -57,7 +57,7 @@ TEMPLATE_STYLES = {
         "accent": "7C2D12",
         "font": "",
         "section_style": r"\Large\bfseries\scshape\color{Accent}",
-        "section_suffix": r"[\color{Accent}\titlerule[1.2pt]]",
+        "section_suffix": r"[\color{Accent}\titlerule]",
         "header": (
             r"\newcommand{\ResumeHeader}[2]{\begin{center}"
             r"{\LARGE\bfseries\scshape\color{Accent} #1}\\[2pt]{\small #2}\end{center}}"
@@ -71,7 +71,7 @@ TEMPLATE_STYLES = {
         "accent": "0F766E",
         "font": r"\renewcommand{\familydefault}{\sfdefault}",
         "section_style": r"\Large\bfseries\sffamily\color{Accent}",
-        "section_suffix": r"[\color{Accent}\titlerule[1.4pt]]",
+        "section_suffix": r"[\color{Accent}\titlerule]",
         "header": (
             r"\newcommand{\ResumeHeader}[2]{\begin{flushleft}"
             r"{\Huge\bfseries\sffamily\color{Accent} #1}\\[4pt]"
