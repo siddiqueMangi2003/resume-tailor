@@ -1,5 +1,6 @@
 import pytest
 from latex_response import (
+    TEMPLATE_STYLES,
     build_latex_document,
     render_structured_resume,
     validate_generated_latex,
@@ -35,11 +36,12 @@ def test_dangerous_latex_is_rejected(dangerous):
         validate_generated_latex(dangerous)
 
 
-@pytest.mark.parametrize("template", ["template1", "template2", "template3"])
+@pytest.mark.parametrize("template", sorted(TEMPLATE_STYLES))
 def test_all_templates_build_complete_documents(template):
     document = build_latex_document(SAFE_BODY, template)
     assert document.startswith(r"\documentclass")
     assert SAFE_BODY in document
+    assert TEMPLATE_STYLES[template]["header"] in document
     assert document.rstrip().endswith(r"\end{document}")
 
 
@@ -85,5 +87,9 @@ def test_structured_resume_ignores_non_text_values():
         }
     )
 
-    assert r"\textbf{Candidate}" in body
+    assert r"\ResumeHeader{Candidate}" in body
     assert "candidate@example.com" in body
+
+
+def test_template_catalog_contains_overleaf_adaptations():
+    assert {"template4", "template5", "template6"}.issubset(TEMPLATE_STYLES)

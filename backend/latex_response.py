@@ -33,19 +33,77 @@ TEMPLATE_STYLES = {
         "accent": "155E75",
         "font": "",
         "section_style": r"\large\bfseries\color{Accent}",
+        "section_suffix": r"[\color{Accent}\titlerule]",
+        "header": (
+            r"\newcommand{\ResumeHeader}[2]{\begin{center}"
+            r"{\LARGE\bfseries\color{Accent} #1}\\[2pt]{\small #2}\end{center}}"
+        ),
+        "item_label": r"\textbullet",
         "margin": "0.65in",
     },
     "template2": {
         "accent": "4338CA",
         "font": r"\renewcommand{\familydefault}{\sfdefault}",
         "section_style": r"\large\bfseries\sffamily\color{Accent}",
+        "section_suffix": "",
+        "header": (
+            r"\newcommand{\ResumeHeader}[2]{{\raggedright"
+            r"{\Huge\bfseries\sffamily\color{Accent} #1}\\[3pt]{\small #2}\par\vspace{6pt}}}"
+        ),
+        "item_label": r"\textcolor{Accent}{\raisebox{1pt}{\rule{3pt}{3pt}}}",
         "margin": "0.7in",
     },
     "template3": {
         "accent": "7C2D12",
         "font": "",
         "section_style": r"\Large\bfseries\scshape\color{Accent}",
+        "section_suffix": r"[\color{Accent}\titlerule[1.2pt]]",
+        "header": (
+            r"\newcommand{\ResumeHeader}[2]{\begin{center}"
+            r"{\LARGE\bfseries\scshape\color{Accent} #1}\\[2pt]{\small #2}\end{center}}"
+        ),
+        "item_label": r"\textcolor{Accent}{\textbullet}",
         "margin": "0.6in",
+    },
+    # Original single-column adaptations of LPPL-licensed designs in the
+    # Overleaf gallery. Source links and attribution are shown in the UI.
+    "template4": {
+        "accent": "0F766E",
+        "font": r"\renewcommand{\familydefault}{\sfdefault}",
+        "section_style": r"\Large\bfseries\sffamily\color{Accent}",
+        "section_suffix": r"[\color{Accent}\titlerule[1.4pt]]",
+        "header": (
+            r"\newcommand{\ResumeHeader}[2]{{\raggedright"
+            r"{\Huge\bfseries\sffamily\color{Accent} #1}\\[4pt]"
+            r"{\small\color{black} #2}\par\vspace{7pt}}}"
+        ),
+        "item_label": r"\textcolor{Accent}{\textbullet}",
+        "margin": "0.62in",
+    },
+    "template5": {
+        "accent": "1D4ED8",
+        "font": r"\renewcommand{\familydefault}{\sfdefault}",
+        "section_style": r"\large\bfseries\sffamily\color{Accent}",
+        "section_suffix": "",
+        "header": (
+            r"\newcommand{\ResumeHeader}[2]{\begin{center}"
+            r"{\Huge\bfseries\sffamily\color{Accent} #1}\\[3pt]"
+            r"{\small\sffamily #2}\end{center}\vspace{2pt}}"
+        ),
+        "item_label": r"\textcolor{Accent}{\textbullet}",
+        "margin": "0.68in",
+    },
+    "template6": {
+        "accent": "713F12",
+        "font": r"\usepackage{tgpagella}",
+        "section_style": r"\large\bfseries\sffamily\color{Accent}",
+        "section_suffix": r"[\color{Accent}\titlerule]",
+        "header": (
+            r"\newcommand{\ResumeHeader}[2]{\begin{center}"
+            r"{\Huge\bfseries\color{Accent} #1}\\[3pt]{\small #2}\end{center}}"
+        ),
+        "item_label": r"\textcolor{Accent}{\textbullet}",
+        "margin": "0.72in",
     },
 }
 
@@ -154,10 +212,8 @@ def render_structured_resume(payload: Any) -> str:
 
     name = _escape_latex(payload.get("name"), 300) or "Candidate"
     contact = _text_list(payload.get("contact"), max_items=10, max_chars=300)
-    lines = [r"\begin{center}", rf"{{\LARGE\textbf{{{name}}}}}\\"]
-    if contact:
-        lines.append(r"\enspace|\enspace ".join(contact))
-    lines.append(r"\end{center}")
+    contact_line = r"\enspace|\enspace ".join(contact)
+    lines = [rf"\ResumeHeader{{{name}}}{{{contact_line}}}"]
 
     summary = _escape_latex(payload.get("summary"), 2_500)
     if summary:
@@ -271,7 +327,7 @@ result concise, ATS-readable, and normally within two pages.
 
 
 def build_latex_document(body: str, template_id: str) -> str:
-    """Insert validated resume content into one of three deterministic templates."""
+    """Insert validated resume content into a deterministic template."""
     body = validate_generated_latex(body)
     style = TEMPLATE_STYLES.get(template_id)
     if style is None:
@@ -290,8 +346,9 @@ def build_latex_document(body: str, template_id: str) -> str:
 \pagestyle{{empty}}
 \setlength{{\parindent}}{{0pt}}
 \setlength{{\parskip}}{{3pt}}
-\setlist[itemize]{{leftmargin=1.2em,itemsep=1pt,topsep=2pt}}
-\titleformat{{\section}}{{{style['section_style']}}}{{}}{{0pt}}{{}}[\color{{Accent}}\titlerule]
+\setlist[itemize]{{leftmargin=1.2em,itemsep=1pt,topsep=2pt,label={{{style['item_label']}}}}}
+{style['header']}
+\titleformat{{\section}}{{{style['section_style']}}}{{}}{{0pt}}{{}}{style['section_suffix']}
 \titlespacing*{{\section}}{{0pt}}{{7pt}}{{3pt}}
 \begin{{document}}
 {body}
