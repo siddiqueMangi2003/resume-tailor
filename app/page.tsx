@@ -42,7 +42,7 @@ export default function HomePage() {
   const [warnings, setWarnings] = useState<string[]>([])
   const [expiresInSeconds, setExpiresInSeconds] = useState(0)
   const [linkedApplication, setLinkedApplication] = useState<{
-    id: string
+    id?: string
     company: string
     role: string
   } | null>(null)
@@ -137,7 +137,7 @@ export default function HomePage() {
       setLatexContent("Your tailored resume is ready.")
       setCurrentStep("complete")
 
-      if (linkedApplication && user) {
+      if (linkedApplication?.id && user) {
         const supabase = getSupabaseBrowserClient()
         await supabase
           ?.from("job_applications")
@@ -240,8 +240,15 @@ export default function HomePage() {
                 <BriefcaseBusiness className="h-4 w-4" />
                 <AlertTitle>Tailoring for {linkedApplication.company}</AlertTitle>
                 <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
-                  <span>{linkedApplication.role} · the template choice will be saved to your tracker.</span>
-                  <Link href="/tracker" className="font-semibold text-primary hover:underline">Back to tracker</Link>
+                  <span>
+                    {linkedApplication.role}
+                    {linkedApplication.id
+                      ? " · the template choice will be saved to your tracker."
+                      : " · the employer description has been imported from Jobs."}
+                  </span>
+                  <Link href={linkedApplication.id ? "/tracker" : "/jobs"} className="font-semibold text-primary hover:underline">
+                    {linkedApplication.id ? "Back to tracker" : "Back to jobs"}
+                  </Link>
                 </AlertDescription>
               </Alert>
             )}

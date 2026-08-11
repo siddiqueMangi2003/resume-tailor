@@ -19,7 +19,11 @@ In **Authentication → URL Configuration**, set:
 
 - Site URL: `https://siddiquemangi2003.github.io/resume-tailor/`
 - Redirect URL: `https://siddiquemangi2003.github.io/resume-tailor/tracker/`
+- Local redirect URL: `http://localhost:3000/`
 - Local redirect URL: `http://localhost:3000/tracker/`
+
+The frontend sends OAuth through the Site URL and restores the page that started authentication.
+This allows navbar login, tracker login, and authenticated job saves to share one safe callback.
 
 Enable Google and/or GitHub in **Authentication → Providers**. Follow the provider instructions in
 Supabase to create the OAuth credentials. The provider callback URL is displayed by Supabase and

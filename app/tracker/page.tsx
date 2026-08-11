@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { Chrome, Cloud, Github, LockKeyhole, ShieldCheck, Sparkles } from "lucide-react"
+import { Cloud, Github, LockKeyhole, ShieldCheck, Sparkles } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { PipelineOrbit } from "@/components/pipeline-orbit"
 import { JobTracker } from "@/components/job-tracker"
@@ -57,11 +57,8 @@ export default function TrackerPage() {
                       <p>Sign in to create a private application pipeline.</p>
                     </div>
                     <div className="auth-buttons">
-                      <Button size="lg" onClick={() => void handleSignIn("google")}>
-                        <Chrome className="mr-2 h-4 w-4" /> Continue with Google
-                      </Button>
-                      <Button size="lg" variant="outline" onClick={() => void handleSignIn("github")}>
-                        <Github className="mr-2 h-4 w-4" /> GitHub
+                      <Button size="lg" onClick={() => void handleSignIn("github")}>
+                        <Github className="mr-2 h-4 w-4" /> Continue with GitHub
                       </Button>
                     </div>
                     {authError && <p className="auth-error" role="alert">{authError}</p>}

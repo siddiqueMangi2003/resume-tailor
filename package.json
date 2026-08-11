@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "ingest:jobs": "node scripts/ingest-greenhouse.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint app components lib",
     "check": "npm run typecheck && npm run lint"

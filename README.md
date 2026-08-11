@@ -1,18 +1,37 @@
 # Resume Tailor
 
-Resume Tailor adapts an existing resume to a target job description without inventing
-qualifications. It produces temporary LaTeX, PDF, and DOCX downloads.
+Resume Tailor discovers employer-direct jobs, adapts an existing resume to a target job
+description without inventing qualifications, and keeps private applications organized in a
+visual tracker. Tailored resumes are available as temporary LaTeX, PDF, and DOCX downloads.
 
 ## Architecture
 
 - Next.js static frontend, deployed to GitHub Pages
 - FastAPI backend, deployed to Render with Docker
+- Supabase Auth and Postgres for private, user-owned application tracking
+- Scheduled Greenhouse ingestion for the public Jobs catalogue
 - Groq for truthful resume rewriting
 - pdfLaTeX for PDF generation
 - Aspose Words Cloud for PDF-to-DOCX conversion
 
-There is no database. Generated files use opaque job identifiers and are deleted from the
-backend after ten minutes by default.
+Generated files use opaque job identifiers and are deleted from the backend after ten minutes
+by default. Application records are stored in Supabase with Row Level Security.
+
+## Jobs catalogue
+
+The public `/jobs` page is generated from selected employers using the public Greenhouse Job
+Board API. `data/greenhouse-boards.mjs` contains the curated board list, and
+`scripts/ingest-greenhouse.mjs` normalizes titles, locations, workplace types, descriptions,
+departments, skills, source links, and update timestamps.
+
+~~~powershell
+npm run ingest:jobs
+~~~
+
+The lightweight catalogue index is stored at `public/data/jobs.json`. Complete descriptions are
+stored separately and loaded only when a visitor opens, saves, or tailors a job. GitHub Pages
+refreshes the deployed catalogue every six hours without adding automated data commits to the
+repository history.
 
 ## Privacy
 
@@ -33,7 +52,8 @@ npm install
 npm run dev
 ~~~
 
-Set NEXT_PUBLIC_API_BASE_URL in .env.local to the backend origin.
+Set `NEXT_PUBLIC_API_BASE_URL` to the backend origin and add the public Supabase project URL and
+publishable key described in `SUPABASE_SETUP.md`.
 
 ## Local backend
 
@@ -83,7 +103,9 @@ intentional here because results are temporary.
 The deploy-pages workflow creates a static Next.js export. Before running it:
 
 1. Create the repository Actions variable NEXT_PUBLIC_API_BASE_URL with the Render origin.
-2. In Settings, Pages, set the source to GitHub Actions.
-3. Run the Deploy frontend to GitHub Pages workflow.
+2. Add the public Supabase URL and publishable key as `NEXT_PUBLIC_SUPABASE_URL` and
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY` repository variables.
+3. In Settings, Pages, set the source to GitHub Actions.
+4. Run the Deploy frontend to GitHub Pages workflow.
 
 The frontend automatically uses the repository name as its GitHub Pages base path.
