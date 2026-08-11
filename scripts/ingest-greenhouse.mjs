@@ -51,13 +51,18 @@ function decodeHtml(value) {
 }
 
 export function htmlToText(value = "") {
-  return decodeHtml(
-    value
-      .replace(/<br\s*\/?\s*>/gi, "\n")
-      .replace(/<\/(p|div|li|h[1-6])>/gi, "\n")
-      .replace(/<li[^>]*>/gi, "• ")
-      .replace(/<[^>]+>/g, " "),
-  )
+  let decoded = value
+  for (let pass = 0; pass < 3; pass += 1) {
+    const next = decodeHtml(decoded)
+    if (next === decoded) break
+    decoded = next
+  }
+
+  return decoded
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .replace(/<\/(p|div|li|h[1-6])>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "• ")
+    .replace(/<[^>]+>/g, " ")
     .replace(/\r/g, "")
     .replace(/[\t ]+/g, " ")
     .replace(/ *\n */g, "\n")

@@ -43,7 +43,7 @@ async function withFullDescription(job: PublicJob) {
     })
   }
   const details = await jobDetailsRequest
-  return { ...job, description: details[job.id] || job.description }
+  return { ...job, description: plainTextDescription(details[job.id] || job.description) }
 }
 
 type JobSort = "newest" | "title" | "company"
@@ -54,8 +54,35 @@ function jobSearchText(job: PublicJob) {
     .toLowerCase()
 }
 
+function plainTextDescription(description: string) {
+  const entities: Record<string, string> = {
+    amp: "&", apos: "'", gt: ">", lt: "<", nbsp: " ", quot: '"',
+  }
+  let decoded = description
+  for (let pass = 0; pass < 3; pass += 1) {
+    const next = decoded
+      .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+      .replace(/&#x([\da-f]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
+      .replace(/&([a-z]+);/gi, (match, name) => entities[name.toLowerCase()] ?? match)
+    if (next === decoded) break
+    decoded = next
+  }
+  return decoded
+    .replace(/<br\s*\/?\s*>/gi, "\n")
+    .replace(/<\/(p|div|li|h[1-6])>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "• ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\r/g, "")
+    .replace(/[\t ]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim()
+}
+
 function descriptionExcerpt(description: string) {
-  const compact = description.replace(/\s+/g, " ").trim()
+  const compact = plainTextDescription(description)
+    .replace(/\s+/g, " ")
+    .trim()
   return compact.length > 210 ? `${compact.slice(0, 207)}…` : compact
 }
 
@@ -378,9 +405,11 @@ export function JobBrowser() {
                   <Button size="sm" onClick={() => void tailorJob(job)} disabled={loadingDetailId === job.id}>
                     {loadingDetailId === job.id ? <LoaderCircle className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />} Tailor
                   </Button>
-                  <a href={job.applyUrl} target="_blank" rel="noopener noreferrer" aria-label={`Apply for ${job.title} at ${job.company}`}>
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
+                  <Button asChild variant="outline" size="sm" className="job-card-apply">
+                    <a href={job.applyUrl} target="_blank" rel="noopener noreferrer" aria-label={`Apply for ${job.title} at ${job.company}`}>
+                      Apply <ExternalLink className="h-3.5 w-3.5" />
+                    </a>
+                  </Button>
                 </div>
               </article>
             ))}
