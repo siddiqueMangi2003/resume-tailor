@@ -2,6 +2,8 @@ import type React from "react"
 import type { Metadata } from "next"
 import { ThemeProvider } from "@/components/theme-provider"
 import { AuthProvider } from "@/components/auth-provider"
+import { AuthDialog } from "@/components/auth-dialog"
+import { OnboardingDialog } from "@/components/onboarding-dialog"
 import "./globals.css"
 
 export const metadata: Metadata = {
@@ -19,7 +21,11 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className="font-sans antialiased">
         <ThemeProvider attribute="class" defaultTheme="light" enableSystem disableTransitionOnChange>
-          <AuthProvider>{children}</AuthProvider>
+          <AuthProvider>
+            {children}
+            <OnboardingDialog />
+            <AuthDialog />
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

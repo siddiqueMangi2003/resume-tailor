@@ -31,6 +31,7 @@ interface TailorApiResponse {
 export default function HomePage() {
   const { user } = useAuth()
   const [resumeFile, setResumeFile] = useState<File | null>(null)
+  const [profileResumeText, setProfileResumeText] = useState("")
   const [jobDescription, setJobDescription] = useState("")
   const [selectedTemplate, setSelectedTemplate] = useState("template1")
   const [currentStep, setCurrentStep] = useState<ProcessStep>("idle")
@@ -68,6 +69,20 @@ export default function HomePage() {
     }
   }, [])
 
+  useEffect(() => {
+    if (!user) { queueMicrotask(() => setProfileResumeText("")); return }
+    const loadProfile = async () => {
+      const supabase = getSupabaseBrowserClient()
+      const { data, error } = await supabase?.from("user_profiles").select("base_resume_text").eq("user_id", user.id).maybeSingle() ?? { data: null, error: null }
+      if (data?.base_resume_text) setProfileResumeText(data.base_resume_text)
+      else if (!error) setProfileResumeText("")
+    }
+    const timer = window.setTimeout(() => void loadProfile(), 0)
+    const handleProfile = (event: Event) => setProfileResumeText((event as CustomEvent<{ base_resume_text?: string }>).detail?.base_resume_text || "")
+    window.addEventListener("resume-tailor-profile-updated", handleProfile)
+    return () => { window.clearTimeout(timer); window.removeEventListener("resume-tailor-profile-updated", handleProfile) }
+  }, [user])
+
   const resetResults = () => {
     setCurrentStep("idle")
     setLatexContent("")
@@ -82,6 +97,11 @@ export default function HomePage() {
   const handleResumeChange = (file: File | null) => {
     setResumeFile(file)
     resetResults()
+  }
+
+  const useProfileResume = () => {
+    if (!profileResumeText) return
+    handleResumeChange(new File([profileResumeText], "resume-tailor-profile.txt", { type: "text/plain" }))
   }
 
   const handleJobDescriptionChange = (description: string) => {
@@ -216,6 +236,16 @@ export default function HomePage() {
         </div>
         <div className="grid lg:grid-cols-2 gap-8">
           <div className="space-y-6">
+            {profileResumeText && !resumeFile && (
+              <Alert className="linked-application-alert">
+                <FileText className="h-4 w-4" />
+                <AlertTitle>Your base resume is ready</AlertTitle>
+                <AlertDescription className="flex flex-wrap items-center justify-between gap-2">
+                  <span>Use the CV you uploaded or built during onboarding.</span>
+                  <Button variant="outline" size="sm" onClick={useProfileResume}>Use profile resume</Button>
+                </AlertDescription>
+              </Alert>
+            )}
             <FileUpload
               title="Upload Your Resume"
               description="Upload a TXT, PDF, or DOCX resume up to 5 MB"

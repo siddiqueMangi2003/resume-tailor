@@ -1,7 +1,6 @@
 "use client"
 
-import { useState } from "react"
-import { Cloud, Github, LockKeyhole, ShieldCheck, Sparkles } from "lucide-react"
+import { Cloud, LockKeyhole, ShieldCheck, Sparkles } from "lucide-react"
 import { SiteHeader } from "@/components/site-header"
 import { PipelineOrbit } from "@/components/pipeline-orbit"
 import { JobTracker } from "@/components/job-tracker"
@@ -9,17 +8,7 @@ import { Button } from "@/components/ui/button"
 import { useAuth } from "@/components/auth-provider"
 
 export default function TrackerPage() {
-  const { configured, loading, user, signIn } = useAuth()
-  const [authError, setAuthError] = useState("")
-
-  const handleSignIn = async (provider: "google" | "github") => {
-    setAuthError("")
-    try {
-      await signIn(provider)
-    } catch (error) {
-      setAuthError(error instanceof Error ? error.message : "Sign-in could not be started.")
-    }
-  }
+  const { configured, loading, user, openAuth } = useAuth()
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-background">
@@ -57,11 +46,10 @@ export default function TrackerPage() {
                       <p>Sign in to create a private application pipeline.</p>
                     </div>
                     <div className="auth-buttons">
-                      <Button size="lg" onClick={() => void handleSignIn("github")}>
-                        <Github className="mr-2 h-4 w-4" /> Continue with GitHub
+                      <Button size="lg" onClick={() => openAuth("login")}>
+                        Open secure sign in
                       </Button>
                     </div>
-                    {authError && <p className="auth-error" role="alert">{authError}</p>}
                     <small>Only your account can read or change your application records.</small>
                   </>
                 ) : (

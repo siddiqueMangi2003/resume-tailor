@@ -8,8 +8,8 @@ visual tracker. Tailored resumes are available as temporary LaTeX, PDF, and DOCX
 
 - Next.js static frontend, deployed to GitHub Pages
 - FastAPI backend, deployed to Render with Docker
-- Supabase Auth and Postgres for private, user-owned application tracking
-- Scheduled Greenhouse ingestion for the public Jobs catalogue
+- Supabase Auth and Postgres for profiles, saved jobs, normalized jobs, and application tracking
+- Scheduled Greenhouse, Lever, Arbeitnow, and Remotive ingestion for the public Jobs catalogue
 - Groq for truthful resume rewriting
 - pdfLaTeX for PDF generation
 - Aspose Words Cloud for PDF-to-DOCX conversion
@@ -19,19 +19,31 @@ by default. Application records are stored in Supabase with Row Level Security.
 
 ## Jobs catalogue
 
-The public `/jobs` page is generated from selected employers using the public Greenhouse Job
-Board API. `data/greenhouse-boards.mjs` contains the curated board list, and
-`scripts/ingest-greenhouse.mjs` normalizes titles, locations, workplace types, descriptions,
-departments, skills, source links, and update timestamps.
+The public `/jobs` page combines Greenhouse, Lever, Arbeitnow, and Remotive public feeds.
+Source-specific adapters under `scripts/job-ingestion` convert every listing to one normalized
+format with titles, locations, workplace types, descriptions, departments, skills, source links,
+employment types, salaries, and timestamps.
 
 ~~~powershell
 npm run ingest:jobs
 ~~~
 
 The lightweight catalogue index is stored at `public/data/jobs.json`. Complete descriptions are
-stored separately and loaded only when a visitor opens, saves, or tailors a job. GitHub Pages
-refreshes the deployed catalogue every six hours without adding automated data commits to the
-repository history.
+stored separately and loaded only when a visitor opens, saves, applies, or tailors a job. GitHub
+Pages refreshes the deployed catalogue every six hours. When a server-side Supabase service-role
+secret is configured, the same normalized records are also upserted into `public.jobs`; otherwise
+the static catalogue remains the reliable fallback.
+
+Saving creates a private shortlist entry. Applying opens the original source page and registers the
+opportunity in the tracker's Applying column. Tailoring transfers the complete job description into
+the resume studio.
+
+## Authentication and onboarding
+
+The frontend offers Google, GitHub, and LinkedIn (OIDC) through Supabase's social authentication.
+First-time visitors can record job preferences and either upload an existing resume for text
+extraction or build a factual base resume from guided questions. Extracted text is stored in the
+user-owned profile; the original uploaded file is not stored.
 
 ## Privacy
 

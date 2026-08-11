@@ -73,6 +73,12 @@ class TailorResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
 
 
+class ResumeExtractResponse(BaseModel):
+    success: bool
+    text: str
+    characters: int
+
+
 def _frontend_origins() -> list[str]:
     configured = os.getenv("FRONTEND_ORIGINS", "http://localhost:3000")
     return [origin.strip().rstrip("/") for origin in configured.split(",") if origin.strip()]
@@ -140,6 +146,19 @@ def _extract_resume_text(content: bytes, extension: str) -> str:
     return text
 
 
+async def _read_resume_upload(resume: UploadFile) -> str:
+    filename = resume.filename or ""
+    extension = Path(filename).suffix.lower()
+    allowed_mime_types = ALLOWED_UPLOADS.get(extension)
+    if not allowed_mime_types or resume.content_type not in allowed_mime_types:
+        raise HTTPException(status_code=400, detail="Upload a UTF-8 TXT, PDF, or DOCX resume.")
+    content = await resume.read(MAX_UPLOAD_BYTES + 1)
+    await resume.close()
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="The resume file is too large.")
+    return _extract_resume_text(content, extension)
+
+
 def _process_resume(
     resume_text: str,
     job_description: str,
@@ -202,18 +221,7 @@ async def tailor_resume(
     if len(job_desc) > MAX_JOB_DESCRIPTION_CHARS:
         raise HTTPException(status_code=413, detail="The job description is too long.")
 
-    filename = resume.filename or ""
-    extension = Path(filename).suffix.lower()
-    allowed_mime_types = ALLOWED_UPLOADS.get(extension)
-    if not allowed_mime_types or resume.content_type not in allowed_mime_types:
-        raise HTTPException(status_code=400, detail="Upload a UTF-8 TXT, PDF, or DOCX resume.")
-
-    content = await resume.read(MAX_UPLOAD_BYTES + 1)
-    await resume.close()
-    if len(content) > MAX_UPLOAD_BYTES:
-        raise HTTPException(status_code=413, detail="The resume file is too large.")
-
-    resume_text = _extract_resume_text(content, extension)
+    resume_text = await _read_resume_upload(resume)
     job_id = uuid4().hex
     job_dir = RUNTIME_DIR / job_id
     job_dir.mkdir(mode=0o700)
@@ -249,6 +257,18 @@ async def tailor_resume(
         expires_in_seconds=RESULT_TTL_SECONDS,
         warnings=warnings,
     )
+
+
+@app.post("/extract_resume", response_model=ResumeExtractResponse)
+@app.post("/extract_resume/", response_model=ResumeExtractResponse, include_in_schema=False)
+async def extract_resume(
+    request: Request,
+    resume: Annotated[UploadFile, File()],
+) -> ResumeExtractResponse:
+    """Extract readable resume text for the user's editable private profile."""
+    await _enforce_rate_limit(request)
+    text = await _read_resume_upload(resume)
+    return ResumeExtractResponse(success=True, text=text, characters=len(text))
 
 
 @app.get("/download/{job_id}/{file_type}")

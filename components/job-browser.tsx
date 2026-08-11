@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import {
   ArrowUpRight,
   Bookmark,
+  BookmarkCheck,
   BriefcaseBusiness,
   Building2,
   CalendarClock,
@@ -22,11 +23,14 @@ import {
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/components/auth-provider"
 import { getSupabaseBrowserClient } from "@/lib/supabase"
+import { loadSavedJobs, registerJobApplication, removeSavedJob, saveJobForUser } from "@/lib/job-actions"
+import { profileMatchScore, type UserProfile } from "@/lib/user-profile"
 import {
   EMPTY_JOB_CATALOGUE,
   WORKPLACE_LABELS,
   formatJobDate,
   type JobCatalogue,
+  type JobSource,
   type PublicJob,
   type WorkplaceType,
 } from "@/lib/public-jobs"
@@ -46,7 +50,7 @@ async function withFullDescription(job: PublicJob) {
   return { ...job, description: plainTextDescription(details[job.id] || job.description) }
 }
 
-type JobSort = "newest" | "title" | "company"
+type JobSort = "recommended" | "newest" | "title" | "company"
 
 function jobSearchText(job: PublicJob) {
   return [job.title, job.company, job.location, job.department, job.skills.join(" "), job.description]
@@ -88,19 +92,23 @@ function descriptionExcerpt(description: string) {
 
 export function JobBrowser() {
   const router = useRouter()
-  const { configured, user, signIn } = useAuth()
+  const { configured, user, openAuth } = useAuth()
   const [catalogue, setCatalogue] = useState<JobCatalogue>(EMPTY_JOB_CATALOGUE)
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState("")
   const [query, setQuery] = useState("")
   const [company, setCompany] = useState("all")
+  const [source, setSource] = useState<JobSource | "all">("all")
   const [workplace, setWorkplace] = useState<WorkplaceType | "all">("all")
   const [sort, setSort] = useState<JobSort>("newest")
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
   const [selectedJob, setSelectedJob] = useState<PublicJob | null>(null)
   const [savingId, setSavingId] = useState("")
+  const [applyingId, setApplyingId] = useState("")
   const [loadingDetailId, setLoadingDetailId] = useState("")
   const [message, setMessage] = useState("")
+  const [savedIds, setSavedIds] = useState<Set<string>>(new Set())
+  const [profile, setProfile] = useState<UserProfile | null>(null)
 
   useEffect(() => {
     let active = true
@@ -127,6 +135,33 @@ export function JobBrowser() {
   }, [])
 
   useEffect(() => {
+    if (!user) { queueMicrotask(() => { setSavedIds(new Set()); setProfile(null) }); return }
+    const supabase = getSupabaseBrowserClient()
+    if (!supabase) return
+    void loadSavedJobs(user.id)
+      .then((jobs) => setSavedIds(new Set(jobs.flatMap((job) => [job.id, job.applyUrl]))))
+      .catch(() => undefined)
+    void supabase.from("user_profiles").select("*").eq("user_id", user.id).maybeSingle()
+      .then(({ data }) => {
+        const resolved = data as UserProfile | null
+        if (!resolved) return
+        setProfile(resolved)
+        setSort("recommended")
+      })
+  }, [user])
+
+  useEffect(() => {
+    const update = (event: Event) => {
+      const next = (event as CustomEvent<UserProfile>).detail
+      if (!next) return
+      setProfile(next)
+      setSort("recommended")
+    }
+    window.addEventListener("resume-tailor-profile-updated", update)
+    return () => window.removeEventListener("resume-tailor-profile-updated", update)
+  }, [])
+
+  useEffect(() => {
     if (!selectedJob) return
     const closeOnEscape = (event: KeyboardEvent) => {
       if (event.key === "Escape") setSelectedJob(null)
@@ -148,14 +183,21 @@ export function JobBrowser() {
     const normalizedQuery = query.trim().toLowerCase()
     return catalogue.jobs
       .filter((job) => company === "all" || job.company === company)
+      .filter((job) => source === "all" || job.source === source)
       .filter((job) => workplace === "all" || job.workplaceType === workplace)
       .filter((job) => !normalizedQuery || jobSearchText(job).includes(normalizedQuery))
       .toSorted((left, right) => {
+        if (sort === "recommended") return profileMatchScore(right, profile) - profileMatchScore(left, profile)
         if (sort === "title") return left.title.localeCompare(right.title)
         if (sort === "company") return left.company.localeCompare(right.company)
         return String(right.updatedAt).localeCompare(String(left.updatedAt))
       })
-  }, [catalogue.jobs, company, query, sort, workplace])
+  }, [catalogue.jobs, company, profile, query, sort, source, workplace])
+
+  const jobIsSaved = useCallback(
+    (job: PublicJob) => savedIds.has(job.id) || savedIds.has(job.applyUrl),
+    [savedIds],
+  )
 
   const saveJob = useCallback(async (job: PublicJob) => {
     setMessage("")
@@ -175,56 +217,25 @@ export function JobBrowser() {
         return
       }
       sessionStorage.setItem("resume-tailor-pending-job", JSON.stringify(detailedJob))
-      try {
-        await signIn("github")
-      } catch (error) {
-        setMessage(error instanceof Error ? error.message : "GitHub sign-in could not be started.")
-        setSavingId("")
+      openAuth("login")
+      setSavingId("")
+      return
+    }
+    try {
+      if (jobIsSaved(job)) {
+        await removeSavedJob(detailedJob, user.id)
+        setSavedIds((current) => { const next = new Set(current); next.delete(job.id); next.delete(job.applyUrl); return next })
+        setMessage(`${detailedJob.title} was removed from Saved.`)
+      } else {
+        await saveJobForUser(detailedJob, user.id)
+        setSavedIds((current) => { const next = new Set(current); next.add(job.id); next.add(job.applyUrl); return next })
+        setMessage(`${detailedJob.title} was added to Saved.`)
       }
-      return
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The job could not be saved.")
     }
-
-    const supabase = getSupabaseBrowserClient()
-    if (!supabase) {
-      setMessage("The private tracker connection is unavailable.")
-      setSavingId("")
-      return
-    }
-
-    const jobUrl = detailedJob.applyUrl || detailedJob.jobUrl
-    const { data: existing, error: lookupError } = await supabase
-      .from("job_applications")
-      .select("id")
-      .eq("job_url", jobUrl)
-      .limit(1)
-      .maybeSingle()
-
-    if (lookupError) {
-      setMessage(lookupError.message)
-      setSavingId("")
-      return
-    }
-    if (existing) {
-      setMessage(`${detailedJob.title} at ${detailedJob.company} is already in your tracker.`)
-      setSavingId("")
-      return
-    }
-
-    const { error } = await supabase.from("job_applications").insert({
-      user_id: user.id,
-      company: detailedJob.company.slice(0, 160),
-      role: detailedJob.title.slice(0, 160),
-      status: "bookmarked",
-      location: detailedJob.location.slice(0, 240),
-      job_url: jobUrl.slice(0, 2048),
-      job_description: detailedJob.description.slice(0, 30_000),
-      notes: `Discovered through ${detailedJob.sourceLabel}.`,
-    })
-
     setSavingId("")
-    if (error) setMessage(error.message)
-    else setMessage(`${detailedJob.title} at ${detailedJob.company} was saved to Bookmarked.`)
-  }, [configured, signIn, user])
+  }, [configured, jobIsSaved, openAuth, user])
 
   useEffect(() => {
     if (!user) return
@@ -238,6 +249,36 @@ export function JobBrowser() {
       queueMicrotask(() => setMessage("The pending job could not be restored after sign-in."))
     }
   }, [saveJob, user])
+
+  const applyJob = useCallback(async (job: PublicJob) => {
+    setApplyingId(job.id)
+    let detailedJob = job
+    try { detailedJob = await withFullDescription(job) }
+    catch { /* The application URL still works with the catalogue excerpt. */ }
+    if (!user) {
+      sessionStorage.setItem("resume-tailor-pending-apply", JSON.stringify(detailedJob))
+      if (configured) openAuth("login")
+      else setMessage("Sign-in is not configured, so the tracker could not record this application.")
+      setApplyingId("")
+      return
+    }
+    try {
+      await registerJobApplication(detailedJob, user.id)
+      setMessage(`${detailedJob.title} was added to the Applying column.`)
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "The application could not be added to the tracker.")
+    }
+    setApplyingId("")
+  }, [configured, openAuth, user])
+
+  useEffect(() => {
+    if (!user) return
+    const pending = sessionStorage.getItem("resume-tailor-pending-apply")
+    if (!pending) return
+    sessionStorage.removeItem("resume-tailor-pending-apply")
+    try { queueMicrotask(() => void applyJob(JSON.parse(pending) as PublicJob)) }
+    catch { queueMicrotask(() => setMessage("The pending application could not be restored.")) }
+  }, [applyJob, user])
 
   const openJob = async (job: PublicJob) => {
     setLoadingDetailId(job.id)
@@ -274,8 +315,9 @@ export function JobBrowser() {
   const resetFilters = () => {
     setQuery("")
     setCompany("all")
+    setSource("all")
     setWorkplace("all")
-    setSort("newest")
+    setSort(profile ? "recommended" : "newest")
     setVisibleCount(PAGE_SIZE)
   }
 
@@ -288,10 +330,10 @@ export function JobBrowser() {
     <div className="jobs-shell">
       <section className="jobs-hero">
         <div>
-          <span className="eyebrow"><DatabaseZap className="h-4 w-4" /> Employer-direct discovery</span>
+          <span className="eyebrow"><DatabaseZap className="h-4 w-4" /> Multi-source discovery</span>
           <h1>Fresh roles.<br /><span>Less noise.</span></h1>
           <p>
-            Explore technology opportunities published directly by selected employers, then save the right ones to your private pipeline or tailor a truthful resume immediately.
+            Explore technology opportunities from employer boards and trusted public feeds, then save the right ones, apply with one click, or tailor a truthful resume immediately.
           </p>
           <div className="jobs-hero-meta">
             <span><BriefcaseBusiness /> {catalogue.jobs.length || "—"} active roles</span>
@@ -300,8 +342,8 @@ export function JobBrowser() {
           </div>
         </div>
         <div className="jobs-signal-card" aria-label="Catalogue workflow">
-          <span>Greenhouse signal</span>
-          <strong>Discover → Save → Tailor</strong>
+          <span>Four-source signal</span>
+          <strong>Discover → Save → Apply</strong>
           <div className="signal-track"><i /><i /><i /></div>
           <small>Every listing links back to the employer’s original application page.</small>
         </div>
@@ -345,9 +387,18 @@ export function JobBrowser() {
           </select>
         </label>
         <label>
+          <DatabaseZap className="h-4 w-4" />
+          <span className="sr-only">Job source</span>
+          <select value={source} onChange={(event) => { setSource(event.target.value as JobSource | "all"); setVisibleCount(PAGE_SIZE) }}>
+            <option value="all">All sources</option>
+            {(catalogue.sources ?? []).map((item) => <option key={item.source} value={item.source}>{item.label} ({item.jobs})</option>)}
+          </select>
+        </label>
+        <label>
           <Filter className="h-4 w-4" />
           <span className="sr-only">Sort jobs</span>
           <select value={sort} onChange={(event) => setSort(event.target.value as JobSort)}>
+            {profile && <option value="recommended">Recommended for you</option>}
             <option value="newest">Recently updated</option>
             <option value="title">Job title</option>
             <option value="company">Company</option>
@@ -360,7 +411,7 @@ export function JobBrowser() {
           <span className="eyebrow">Live catalogue</span>
           <h2>{filteredJobs.length} opportunities match this view</h2>
         </div>
-        {(query || company !== "all" || workplace !== "all" || sort !== "newest") && (
+        {(query || company !== "all" || source !== "all" || workplace !== "all" || sort !== (profile ? "recommended" : "newest")) && (
           <button onClick={resetFilters}>Clear filters</button>
         )}
       </div>
@@ -380,7 +431,7 @@ export function JobBrowser() {
               <article className="opportunity-card" key={job.id}>
                 <div className="opportunity-topline">
                   <span className={`workplace-badge ${job.workplaceType}`}>{WORKPLACE_LABELS[job.workplaceType]}</span>
-                  <span>{formatJobDate(job.updatedAt)}</span>
+                  <span>{job.sourceLabel} · {formatJobDate(job.updatedAt)}</span>
                 </div>
                 <button className="opportunity-title" onClick={() => void openJob(job)} aria-busy={loadingDetailId === job.id}>
                   <span className="company-monogram">{job.company.slice(0, 1)}</span>
@@ -399,15 +450,15 @@ export function JobBrowser() {
                 )}
                 <div className="opportunity-actions">
                   <Button variant="outline" size="sm" onClick={() => void saveJob(job)} disabled={savingId === job.id}>
-                    {savingId === job.id ? <LoaderCircle className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Bookmark className="mr-1.5 h-3.5 w-3.5" />}
-                    Save
+                    {savingId === job.id ? <LoaderCircle className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : jobIsSaved(job) ? <BookmarkCheck className="mr-1.5 h-3.5 w-3.5" /> : <Bookmark className="mr-1.5 h-3.5 w-3.5" />}
+                    {jobIsSaved(job) ? "Saved" : "Save"}
                   </Button>
                   <Button size="sm" onClick={() => void tailorJob(job)} disabled={loadingDetailId === job.id}>
                     {loadingDetailId === job.id ? <LoaderCircle className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />} Tailor
                   </Button>
                   <Button asChild variant="outline" size="sm" className="job-card-apply">
-                    <a href={job.applyUrl} target="_blank" rel="noopener noreferrer" aria-label={`Apply for ${job.title} at ${job.company}`}>
-                      Apply <ExternalLink className="h-3.5 w-3.5" />
+                    <a href={job.applyUrl} target="_blank" rel="noopener noreferrer" aria-label={`Apply for ${job.title} at ${job.company}`} onClick={() => void applyJob(job)} aria-busy={applyingId === job.id}>
+                      {applyingId === job.id ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <>Apply <ExternalLink className="h-3.5 w-3.5" /></>}
                     </a>
                   </Button>
                 </div>
@@ -433,7 +484,7 @@ export function JobBrowser() {
 
       <footer className="jobs-source-note">
         <DatabaseZap className="h-4 w-4" />
-        Listings are collected from public Greenhouse employer boards. Availability can change; verify every role on the employer’s application page.
+        Listings come from Greenhouse, Lever, Arbeitnow and Remotive public feeds. Remotive listings link back to Remotive. Availability can change; verify every role on its source page.
       </footer>
 
       {selectedJob && (
@@ -455,10 +506,10 @@ export function JobBrowser() {
             </div>
             <div className="job-detail-actions">
               <Button variant="outline" onClick={() => void saveJob(selectedJob)} disabled={savingId === selectedJob.id}>
-                <Bookmark className="mr-2 h-4 w-4" /> Save to tracker
+                {jobIsSaved(selectedJob) ? <BookmarkCheck className="mr-2 h-4 w-4" /> : <Bookmark className="mr-2 h-4 w-4" />} {jobIsSaved(selectedJob) ? "Saved" : "Save job"}
               </Button>
               <Button onClick={() => void tailorJob(selectedJob)}><Sparkles className="mr-2 h-4 w-4" /> Tailor resume</Button>
-              <a href={selectedJob.applyUrl} target="_blank" rel="noopener noreferrer" className="job-apply-link">
+              <a href={selectedJob.applyUrl} target="_blank" rel="noopener noreferrer" className="job-apply-link" onClick={() => void applyJob(selectedJob)}>
                 Apply on employer site <ExternalLink className="h-4 w-4" />
               </a>
             </div>

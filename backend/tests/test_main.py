@@ -17,6 +17,20 @@ def test_invalid_download_is_not_exposed():
     assert response.status_code == 404
 
 
+def test_extract_resume_returns_plain_text():
+    main.request_history.clear()
+    response = client.post(
+        "/extract_resume",
+        files={"resume": ("resume.txt", b"Alex Morgan\nPython engineer", "text/plain")},
+    )
+    assert response.status_code == 200
+    assert response.json() == {
+        "success": True,
+        "text": "Alex Morgan\nPython engineer",
+        "characters": 27,
+    }
+
+
 def test_tailor_endpoint_returns_temporary_downloads(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(main, "RUNTIME_DIR", tmp_path)
     main.request_history.clear()

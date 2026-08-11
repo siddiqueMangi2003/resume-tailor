@@ -14,13 +14,19 @@ import { getSupabaseBrowserClient, isSupabaseConfigured } from "@/lib/supabase"
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? ""
 const authReturnKey = "resume-tailor-auth-return"
+export type AuthProviderName = "google" | "github" | "linkedin_oidc"
+export type AuthMode = "login" | "signup"
 
 interface AuthContextValue {
   configured: boolean
   loading: boolean
   session: Session | null
   user: User | null
-  signIn: (provider: "google" | "github") => Promise<void>
+  authOpen: boolean
+  authMode: AuthMode
+  openAuth: (mode?: AuthMode) => void
+  closeAuth: () => void
+  signIn: (provider: AuthProviderName) => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -29,6 +35,8 @@ const AuthContext = createContext<AuthContextValue | null>(null)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [loading, setLoading] = useState(isSupabaseConfigured)
+  const [authOpen, setAuthOpen] = useState(false)
+  const [authMode, setAuthMode] = useState<AuthMode>("login")
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient()
@@ -64,7 +72,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  const signIn = useCallback(async (provider: "google" | "github") => {
+  const openAuth = useCallback((mode: AuthMode = "login") => {
+    setAuthMode(mode)
+    setAuthOpen(true)
+  }, [])
+
+  const closeAuth = useCallback(() => setAuthOpen(false), [])
+
+  const signIn = useCallback(async (provider: AuthProviderName) => {
     const supabase = getSupabaseBrowserClient()
     if (!supabase) return
 
@@ -75,7 +90,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const redirectTo = `${window.location.origin}${basePath}/`
     const { error } = await supabase.auth.signInWithOAuth({
       provider: provider as Provider,
-      options: { redirectTo },
+      options: {
+        redirectTo,
+        queryParams: provider === "google" ? { prompt: "select_account" } : undefined,
+      },
     })
     if (error) throw error
   }, [])
@@ -93,10 +111,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       session,
       user: session?.user ?? null,
+      authOpen,
+      authMode,
+      openAuth,
+      closeAuth,
       signIn,
       signOut,
     }),
-    [loading, session, signIn, signOut],
+    [authMode, authOpen, closeAuth, loading, openAuth, session, signIn, signOut],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

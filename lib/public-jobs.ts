@@ -1,8 +1,9 @@
 export type WorkplaceType = "remote" | "hybrid" | "onsite" | "unspecified"
+export type JobSource = "greenhouse" | "lever" | "arbeitnow" | "remotive"
 
 export interface PublicJob {
   id: string
-  source: "greenhouse"
+  source: JobSource
   sourceLabel: string
   sourceJobId: string
   company: string
@@ -10,23 +11,28 @@ export interface PublicJob {
   location: string
   workplaceType: WorkplaceType
   department: string
+  employmentType: string
+  salary: string
   skills: string[]
   description: string
   jobUrl: string
   applyUrl: string
+  publishedAt: string | null
   updatedAt: string | null
 }
 
 export interface JobCatalogue {
   generatedAt: string
   source: string
-  companies: Array<{ company: string; token: string }>
+  sources: Array<{ source: JobSource; label: string; jobs: number }>
+  companies: Array<{ company: string; source: JobSource }>
   jobs: PublicJob[]
 }
 
 export const EMPTY_JOB_CATALOGUE: JobCatalogue = {
   generatedAt: "",
-  source: "Greenhouse public Job Board API",
+  source: "Public job feeds",
+  sources: [],
   companies: [],
   jobs: [],
 }
